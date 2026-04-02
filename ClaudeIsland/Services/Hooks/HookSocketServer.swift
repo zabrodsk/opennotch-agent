@@ -60,6 +60,7 @@ struct HookEvent: Codable, Sendable {
             // Note: Full PermissionContext is constructed by SessionStore, not here
             // This is just for quick phase checks
             return .waitingForApproval(PermissionContext(
+                provider: .claude,
                 toolUseId: toolUseId ?? "",
                 toolName: tool ?? "unknown",
                 toolInput: toolInput,

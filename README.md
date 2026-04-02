@@ -17,10 +17,21 @@
 ## Features
 
 - **Notch UI** — Animated overlay that expands from the MacBook notch
-- **Live Session Monitoring** — Track multiple Claude Code sessions in real-time
+- **Live Session Monitoring** — Track multiple Claude Code and Codex sessions in real-time
 - **Permission Approvals** — Approve or deny tool executions directly from the notch
 - **Chat History** — View full conversation history with markdown rendering
 - **Auto-Setup** — Hooks install automatically on first launch
+
+## Codex Integration (WIP)
+
+- Codex sessions are discovered from `~/.codex/sessions/**/rollout-*.jsonl`
+- The app normalizes Codex activity into the same session model used by Claude
+- The expanded notch now groups active sessions into provider-specific cards (`Claude` orange, `Codex` blue gradient)
+- Closed-notch activity shows provider identity (Claude crab, Codex logo, or both when mixed)
+- Codex approval/question prompts are inferred from both `custom_tool_call` and `function_call` events (`ask_user`/`AskUserQuestion` included)
+- Codex notch actions map to deterministic TUI shortcuts for tmux-backed sessions (`Approve: y`, `Reject: n`)
+- Codex target routing now resolves by `tty`, `pid`, then `cwd` fallback for improved action reliability across concurrent sessions
+- Expanded chat history now includes Codex conversation + tool-call timeline (parsed from Codex rollout JSONL), with provider-matched accents in chat indicators
 
 ## Requirements
 
