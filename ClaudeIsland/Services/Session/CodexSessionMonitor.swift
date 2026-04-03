@@ -16,6 +16,7 @@ final class CodexSessionMonitor {
     }()
 
     private struct StatusSnapshot: Equatable {
+        let provider: AgentProvider
         let status: String
         let tool: String?
         let toolUseId: String?
@@ -69,7 +70,7 @@ final class CodexSessionMonitor {
 
         // Keep a longer activity window so long-running prompts/questions remain visible.
         let threshold = Date().addingTimeInterval(-7200)
-        var activeIds = Set<String>()
+        var activeKeys = Set<String>()
 
         for case let file as URL in enumerator {
             guard file.pathExtension == "jsonl",
@@ -80,13 +81,14 @@ final class CodexSessionMonitor {
             guard modDate >= threshold else { continue }
 
             guard let sessionMeta = parseSessionMeta(file: file) else { continue }
-            let sessionId = sessionMeta.sessionId
-            activeIds.insert(sessionId)
-            knownSessionDirs[sessionId] = sessionMeta.cwd
+            let key = monitorKey(sessionId: sessionMeta.sessionId)
+            activeKeys.insert(key)
+            knownSessionDirs[key] = sessionMeta.cwd
 
             let status = inferStatus(file: file)
             emitIfChanged(
-                sessionId: sessionId,
+                provider: provider(from: sessionMeta),
+                sessionId: sessionMeta.sessionId,
                 cwd: sessionMeta.cwd,
                 status: status.status,
                 tool: status.tool,
@@ -95,10 +97,15 @@ final class CodexSessionMonitor {
             )
         }
 
-        let missing = Set(sessionStatuses.keys).subtracting(activeIds)
-        for sessionId in missing {
-            let cwd = knownSessionDirs[sessionId] ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let missing = Set(sessionStatuses.keys).subtracting(activeKeys)
+        for key in missing {
+            guard let sessionId = sessionId(from: key),
+                  let provider = provider(from: key) else {
+                continue
+            }
+            let cwd = knownSessionDirs[key] ?? FileManager.default.homeDirectoryForCurrentUser.path
             emitIfChanged(
+                provider: provider,
                 sessionId: sessionId,
                 cwd: cwd,
                 status: "ended",
@@ -106,11 +113,12 @@ final class CodexSessionMonitor {
                 toolUseId: nil,
                 toolInput: nil
             )
-            sessionStatuses.removeValue(forKey: sessionId)
+            sessionStatuses.removeValue(forKey: key)
         }
     }
 
     private func emitIfChanged(
+        provider: AgentProvider,
         sessionId: String,
         cwd: String,
         status: String,
@@ -118,10 +126,12 @@ final class CodexSessionMonitor {
         toolUseId: String?,
         toolInput: [String: AnyCodable]?
     ) {
-        let snapshot = StatusSnapshot(status: status, tool: tool, toolUseId: toolUseId)
-        guard sessionStatuses[sessionId] != snapshot else { return }
-        sessionStatuses[sessionId] = snapshot
+        let key = monitorKey(sessionId: sessionId)
+        let snapshot = StatusSnapshot(provider: provider, status: status, tool: tool, toolUseId: toolUseId)
+        guard sessionStatuses[key] != snapshot else { return }
+        sessionStatuses[key] = snapshot
         eventHandler?(CodexEvent(
+            provider: provider,
             sessionId: sessionId,
             cwd: cwd,
             status: status,
@@ -131,7 +141,7 @@ final class CodexSessionMonitor {
         ))
     }
 
-    private func parseSessionMeta(file: URL) -> (sessionId: String, cwd: String)? {
+    private func parseSessionMeta(file: URL) -> (sessionId: String, cwd: String, source: Any?, originator: String?)? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
 
@@ -147,10 +157,45 @@ final class CodexSessionMonitor {
                   let cwd = payload["cwd"] as? String else {
                 continue
             }
-            return (sessionId, cwd)
+            return (sessionId, cwd, payload["source"], payload["originator"] as? String)
         }
 
         return nil
+    }
+
+    private func provider(from meta: (sessionId: String, cwd: String, source: Any?, originator: String?)) -> AgentProvider {
+        // GitHub Copilot CLI writes Codex-format rollout files under ~/.codex/sessions.
+        // We map those sessions to Copilot by source/originator markers.
+        if let sourceString = meta.source as? String, sourceString.localizedCaseInsensitiveContains("copilot") {
+            return .copilot
+        }
+        if let sourceDict = meta.source as? [String: Any] {
+            let sourceBlob = String(describing: sourceDict)
+            if sourceBlob.localizedCaseInsensitiveContains("copilot") {
+                return .copilot
+            }
+        }
+        if let originator = meta.originator,
+           originator.localizedCaseInsensitiveContains("copilot")
+            || originator.localizedCaseInsensitiveContains("github")
+        {
+            return .copilot
+        }
+        return .codex
+    }
+
+    private func monitorKey(sessionId: String) -> String {
+        "codex-monitor:\(sessionId)"
+    }
+
+    private func sessionId(from key: String) -> String? {
+        let prefix = "codex-monitor:"
+        guard key.hasPrefix(prefix) else { return nil }
+        return String(key.dropFirst(prefix.count))
+    }
+
+    private func provider(from key: String) -> AgentProvider? {
+        sessionStatuses[key]?.provider
     }
 
     private struct InferredState {

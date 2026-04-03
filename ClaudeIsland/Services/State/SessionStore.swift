@@ -174,7 +174,7 @@ actor SessionStore {
     }
 
     private func processCodexEvent(_ event: CodexEvent) async {
-        let sessionKey = "codex:\(event.sessionId)"
+        let sessionKey = event.provider.prefixedSessionId(event.sessionId)
 
         if event.status == "ended" {
             sessions.removeValue(forKey: sessionKey)
@@ -198,9 +198,9 @@ actor SessionStore {
         case "waiting_for_input":
             nextPhase = .waitingForInput
         case "waiting_for_approval":
-            let stableToolUseId = event.toolUseId ?? "codex-\(event.sessionId)-\(Int(event.timestamp.timeIntervalSince1970))"
+            let stableToolUseId = event.toolUseId ?? "\(event.provider.rawValue)-\(event.sessionId)-\(Int(event.timestamp.timeIntervalSince1970))"
             nextPhase = .waitingForApproval(PermissionContext(
-                provider: .codex,
+                provider: event.provider,
                 toolUseId: stableToolUseId,
                 toolName: event.tool ?? "exec_command",
                 toolInput: event.toolInput,
