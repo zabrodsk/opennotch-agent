@@ -4,6 +4,7 @@ typealias CodexEventHandler = @Sendable (CodexEvent) -> Void
 
 final class CodexSessionMonitor {
     static let shared = CodexSessionMonitor()
+    private static let activeWindow: TimeInterval = 300
 
     private let queue = DispatchQueue(label: "com.claudeisland.codex-monitor", qos: .utility)
     private var scanTimer: DispatchSourceTimer?
@@ -68,8 +69,8 @@ final class CodexSessionMonitor {
             options: [.skipsHiddenFiles]
         ) else { return }
 
-        // Keep a longer activity window so long-running prompts/questions remain visible.
-        let threshold = Date().addingTimeInterval(-7200)
+        let threshold = Date().addingTimeInterval(-Self.activeWindow)
+        let activeCopilotCwds = activeCopilotWorkingDirectories(threshold: threshold)
         var activeKeys = Set<String>()
 
         for case let file as URL in enumerator {
@@ -81,13 +82,15 @@ final class CodexSessionMonitor {
             guard modDate >= threshold else { continue }
 
             guard let sessionMeta = parseSessionMeta(file: file) else { continue }
+            let sessionProvider = provider(from: sessionMeta, activeCopilotCwds: activeCopilotCwds)
+
             let key = monitorKey(sessionId: sessionMeta.sessionId)
             activeKeys.insert(key)
             knownSessionDirs[key] = sessionMeta.cwd
 
             let status = inferStatus(file: file)
             emitIfChanged(
-                provider: provider(from: sessionMeta),
+                provider: sessionProvider,
                 sessionId: sessionMeta.sessionId,
                 cwd: sessionMeta.cwd,
                 status: status.status,
@@ -163,9 +166,13 @@ final class CodexSessionMonitor {
         return nil
     }
 
-    private func provider(from meta: (sessionId: String, cwd: String, source: Any?, originator: String?)) -> AgentProvider {
+    private func provider(
+        from meta: (sessionId: String, cwd: String, source: Any?, originator: String?),
+        activeCopilotCwds: Set<String>
+    ) -> AgentProvider {
         // GitHub Copilot CLI writes Codex-format rollout files under ~/.codex/sessions.
-        // We map those sessions to Copilot by source/originator markers.
+        // We map those sessions to Copilot by source/originator markers, and
+        // fall back to matching against active Copilot session-state working directories.
         if let sourceString = meta.source as? String, sourceString.localizedCaseInsensitiveContains("copilot") {
             return .copilot
         }
@@ -181,7 +188,53 @@ final class CodexSessionMonitor {
         {
             return .copilot
         }
+        if activeCopilotCwds.contains(normalizePath(meta.cwd)) {
+            return .copilot
+        }
         return .codex
+    }
+
+    private func activeCopilotWorkingDirectories(threshold: Date) -> Set<String> {
+        let fm = FileManager.default
+        let root = fm.homeDirectoryForCurrentUser
+            .appendingPathComponent(".copilot")
+            .appendingPathComponent("session-state")
+        guard fm.fileExists(atPath: root.path),
+              let entries = try? fm.contentsOfDirectory(
+                  at: root,
+                  includingPropertiesForKeys: [.isDirectoryKey],
+                  options: [.skipsHiddenFiles]
+              ) else {
+            return []
+        }
+
+        var cwds = Set<String>()
+        for entry in entries {
+            guard (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+            let eventsFile = entry.appendingPathComponent("events.jsonl")
+            guard fm.fileExists(atPath: eventsFile.path) else { continue }
+
+            let attrs = try? fm.attributesOfItem(atPath: eventsFile.path)
+            let modDate = attrs?[.modificationDate] as? Date ?? .distantPast
+            guard modDate >= threshold else { continue }
+
+            let workspaceFile = entry.appendingPathComponent("workspace.yaml")
+            guard let content = try? String(contentsOf: workspaceFile, encoding: .utf8) else { continue }
+            for rawLine in content.components(separatedBy: .newlines) {
+                let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard line.hasPrefix("cwd:") else { continue }
+                let value = line.dropFirst("cwd:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty {
+                    cwds.insert(normalizePath(value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))))
+                }
+                break
+            }
+        }
+        return cwds
+    }
+
+    private func normalizePath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 
     private func monitorKey(sessionId: String) -> String {
