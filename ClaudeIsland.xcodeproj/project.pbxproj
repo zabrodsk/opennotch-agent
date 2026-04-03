@@ -13,7 +13,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		FD33FD5D2EDF32D7002A6548 /* Claude Island.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Island.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FD33FD5D2EDF32D7002A6548 /* OpenNotch Agent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenNotch Agent.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -62,7 +62,7 @@
 		FD33FD5E2EDF32D7002A6548 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FD33FD5D2EDF32D7002A6548 /* Claude Island.app */,
+				FD33FD5D2EDF32D7002A6548 /* OpenNotch Agent.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,7 +92,7 @@
 				FD0F42E62EE7ABA400980302 /* Mixpanel */,
 			);
 			productName = ClaudeIsland;
-			productReference = FD33FD5D2EDF32D7002A6548 /* Claude Island.app */;
+			productReference = FD33FD5D2EDF32D7002A6548 /* OpenNotch Agent.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -310,8 +310,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.celestial.ClaudeIsland;
-				PRODUCT_NAME = "Claude Island";
+				PRODUCT_BUNDLE_IDENTIFIER = com.zabrodsk.OpenNotchAgent;
+				PRODUCT_NAME = "OpenNotch Agent";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -359,8 +359,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.celestial.ClaudeIsland;
-				PRODUCT_NAME = "Claude Island";
+				PRODUCT_BUNDLE_IDENTIFIER = com.zabrodsk.OpenNotchAgent;
+				PRODUCT_NAME = "OpenNotch Agent";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
